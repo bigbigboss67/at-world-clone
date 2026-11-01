@@ -77,10 +77,15 @@
       document.getElementById("gate").hidden = true;
       const host = document.getElementById("host");
       host.hidden = false;
-      AIBuilder.mount(host, {
+      const studio = AIBuilder.mount(host, {
         builderUrl: BUILDER_URL,
         getToken: fetchToken,
-        onEvent: (ev) => console.log("[studio]", ev.type),
+        onEvent: (ev) => {
+          console.log("[studio]", ev.type);
+          // Seed an empty site with this portal's own pages. The editor ignores this
+          // when the site already has content, so saved edits are never overwritten.
+          if (ev.type === "ready") studio.send({ type: "builder:import", url: location.origin + "/" });
+        },
       });
     } catch (ex) {
       err.textContent = ex.message;

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Studio</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: #0b0d12; color: #e8eaf0; font: 15px system-ui, sans-serif; }
+  #host { height: 100%; }
+  #gate { height: 100%; display: grid; place-items: center; padding: 16px; }
+  form { width: 100%; max-width: 360px; display: grid; gap: 12px; }
+  h1 { margin: 0; font-size: 20px; }
+  label { display: grid; gap: 6px; font-size: 13px; opacity: .85; }
+  input, button { font: inherit; padding: 10px 12px; border-radius: 6px; border: 1px solid #3a4152; background: #151922; color: inherit; }
+  button { cursor: pointer; background: #e8b84a; color: #111; border-color: #e8b84a; font-weight: 600; }
+  button:disabled { opacity: .6; cursor: wait; }
+  input:focus-visible, button:focus-visible { outline: 2px solid #e8b84a; outline-offset: 2px; }
+  #err { min-height: 1.2em; margin: 0; color: #ff8b8b; font-size: 13px; }
+</style>
+</head>
+<body>
+<main id="gate">
+  <form id="form">
+    <h1>Studio</h1>
+    <label>Access key
+      <input id="key" type="password" autocomplete="current-password" required autofocus>
+    </label>
+    <button id="go" type="submit">Open studio</button>
+    <p id="err" role="alert"></p>
+  </form>
+</main>
+<div id="host" hidden></div>
+
+<script>
+  // Public URL of the AI Builder deployment. It must list this site's origin in its
+  // TENANTS (origins) and EMBED_ORIGINS, otherwise the browser refuses to frame it.
+  const BUILDER_URL = "https://ai-builder-three-orpin.vercel.app";
+
+  const form = document.getElementById("form");
+  const err = document.getElementById("err");
+  const go = document.getElementById("go");
+  let key = ""; // kept in memory only, so the SDK can refresh the token before it expires
+
+  async function fetchToken() {
+    const r = await fetch("/api/builder-token", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    if (r.status === 401) throw new Error("Wrong access key.");
+    if (!r.ok) throw new Error(r.status === 500 ? "Studio is not configured on the server yet." : "Could not get a studio token.");
+    return r.text();
+  }
+
+  function loadSdk() {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = BUILDER_URL + "/builder-embed.js";
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("Could not load the studio."));
+      document.head.appendChild(s);
+    });
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    err.textContent = "";
+    go.disabled = true;
+    key = document.getElementById("key").value;
+    try {
+      await fetchToken(); // validates the key before showing the editor
+      await loadSdk();
+      document.getElementById("gate").hidden = true;
+      const host = document.getElementById("host");
+      host.hidden = false;
+      AIBuilder.mount(host, {
+        builderUrl: BUILDER_URL,
+        getToken: fetchToken,
+        onEvent: (ev) => console.log("[studio]", ev.type),
+      });
+    } catch (ex) {
+      err.textContent = ex.message;
+      go.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
